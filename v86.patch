@@ -1,0 +1,133 @@
+diff --git a/src/browser/main.js b/src/browser/main.js
+index 84bb3383..2eb2a2a3 100644
+--- a/src/browser/main.js
++++ b/src/browser/main.js
+@@ -4,6 +4,7 @@
+ {
+     /** @const */
+     var ON_LOCALHOST = !location.hostname.endsWith("copy.sh");
++    var ON_MY_LOCALHOST = !location.hostname.endsWith("java-on-web.org");
+ 
+     /**
+      * @return {Object.<string, string>}
+@@ -178,6 +179,41 @@
+ 
+         // Abandonware OS images are from https://winworldpc.com/library/operating-systems
+         var oses = [
++            {
++                id: "jre-18",
++                memory_size: 256 * 1024 * 1024,
++                hda: {
++                    url: host + "tiny.img",
++                    size: 600 * 1024 * 1024,
++                    async: true,
++                },
++                cdrom: {
++                    url: host + "TinyCore-current.iso",
++                    size: 22 * 1024 * 1024,
++                    async: false,
++                },
++                state: {
++                    url: host + "v86state.bin.zst",
++                },
++                name: "jre-18",
++                homepage: "http://www.tinycorelinux.net/",
++            },
++            {
++                id: "jre-18-boot",
++                memory_size: 256 * 1024 * 1024,
++                hda: {
++                    url: host + "tiny.img",
++                    size: 600 * 1024 * 1024,
++                    async: true,
++                },
++                cdrom: {
++                    url: host + "TinyCore-current.iso",
++                    size: 22 * 1024 * 1024,
++                    async: false,
++                },
++                name: "jre-18-boot",
++                homepage: "http://www.tinycorelinux.net/",
++            },
+             {
+                 id: "archlinux",
+                 name: "Arch Linux",
+@@ -1269,7 +1305,7 @@
+ 
+             "boot_order": settings.boot_order || parseInt($("boot_order").value, 16) || 0,
+ 
+-            "network_relay_url": ON_LOCALHOST ? "ws://localhost:8080/" : networking_proxy,
++            "network_relay_url": ON_MY_LOCALHOST ? "ws://localhost:8080/" : networking_proxy,
+ 
+             "bios": bios,
+             "vga_bios": vga_bios,
+@@ -1339,6 +1375,20 @@
+                     emulator.keyboard_send_text("\n");
+                 }, 3000);
+             }
++            else if (settings.id === "jre-18")
++            {
++              const queryString = window.location.search;
++              const urlParams = new URLSearchParams(queryString);
++              const urlJar = urlParams.get('jar')
++              if(urlJar === "") {}
++              else
++              {
++                emulator.serial0_send("<execute>\n");
++                emulator.serial0_send("wget " + urlJar + "\n");
++                emulator.serial0_send("java -jar *.jar");
++                emulator.serial0_send("<end>");
++              }
++            }
+ 
+             init_ui(settings, emulator);
+ 
+@@ -1357,6 +1407,17 @@
+             el.textContent = "Loading " + e.file_name + " failed. Check your connection " +
+                              "and reload the page to try again.";
+         });
++
++        var serdata = "";
++        emulator.add_listener("serial0-output-char", function(char)
++        {
++            if(char === "\r")
++            {
++                console.log("Got serial data: " + serdata);
++                return;
++            }
++            serdata += char;
++        });
+     }
+ 
+     /**
+diff --git a/tools/docker/exec/Dockerfile b/tools/docker/exec/Dockerfile
+index efa1c7fd..36ae82fc 100644
+--- a/tools/docker/exec/Dockerfile
++++ b/tools/docker/exec/Dockerfile
+@@ -14,7 +14,8 @@ WORKDIR /v86
+ 
+ COPY --from=v86-builder v86 .
+ 
+-ARG PORT=8000
+-CMD python3 -m http.server ${PORT}
++#ARG PORT=8000
++CMD cp -r /v86/ /fs_mount/
++#python3 -m http.server ${PORT}
+ 
+-EXPOSE ${PORT}
++#EXPOSE ${PORT}
+diff --git a/tools/docker/exec/build.sh b/tools/docker/exec/build.sh
+index 0e4528a0..548ace37 100755
+--- a/tools/docker/exec/build.sh
++++ b/tools/docker/exec/build.sh
+@@ -1,5 +1,8 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++echo "Check sudo..."
++sudo ls
+ cd "$(dirname "$0")"
+-tar -cf - ../../../{*.html,*.js,*.css,gen,lib,src,bios,.cargo,Cargo.toml,Makefile,tools} | \
+-    docker build -t v86:alpine-3.14 -f tools/docker/exec/Dockerfile -
++cd ../../../
++tar -cf - ./{*.html,*.js,*.css,gen,lib,src,bios,.cargo,Cargo.toml,Makefile,tools} | \
++    sudo docker build -t v86:alpine-3.14 -f tools/docker/exec/Dockerfile -
