@@ -1,16 +1,38 @@
+diff --git a/Makefile b/Makefile
+index cf0a19c7..578f2873 100644
+--- a/Makefile
++++ b/Makefile
+@@ -97,7 +97,7 @@ CORE_FILES:=$(addprefix src/,$(CORE_FILES))
+ LIB_FILES:=$(addprefix lib/,$(LIB_FILES))
+ BROWSER_FILES:=$(addprefix src/browser/,$(BROWSER_FILES))
+ 
+-build/v86_all.js: $(CLOSURE) src/*.js src/browser/*.js lib/*.js
++build/v86_all.js: $(CLOSURE) build/xterm.js src/*.js src/browser/*.js lib/*.js
+ 	mkdir -p build
+ 	-ls -lh build/v86_all.js
+ 	java -jar $(CLOSURE) \
+@@ -112,7 +112,7 @@ build/v86_all.js: $(CLOSURE) src/*.js src/browser/*.js lib/*.js
+ 		--js src/browser/main.js
+ 	ls -lh build/v86_all.js
+ 
+-build/v86_all_debug.js: $(CLOSURE) src/*.js src/browser/*.js lib/*.js
++build/v86_all_debug.js: $(CLOSURE) build/xterm.js src/*.js src/browser/*.js lib/*.js
+ 	mkdir -p build
+ 	java -jar $(CLOSURE) \
+ 		--js_output_file build/v86_all_debug.js\
+@@ -334,6 +334,7 @@ build/libwabt.js:
+ 	rm build/1.0.6.zip
+ 
+ build/xterm.js:
++	mkdir -p build
+ 	curl https://cdn.jsdelivr.net/npm/xterm@4.9.0/lib/xterm.js > build/xterm.js
+ 	curl https://cdn.jsdelivr.net/npm/xterm@4.9.0/lib/xterm.js.map > build/xterm.js.map
+ 	curl https://cdn.jsdelivr.net/npm/xterm@4.9.0/css/xterm.css > build/xterm.css
 diff --git a/src/browser/main.js b/src/browser/main.js
-index 84bb3383..2eb2a2a3 100644
+index 84bb3383..09977bd0 100644
 --- a/src/browser/main.js
 +++ b/src/browser/main.js
-@@ -4,6 +4,7 @@
- {
-     /** @const */
-     var ON_LOCALHOST = !location.hostname.endsWith("copy.sh");
-+    var ON_MY_LOCALHOST = !location.hostname.endsWith("java-on-web.org");
- 
-     /**
-      * @return {Object.<string, string>}
-@@ -178,6 +179,41 @@
+@@ -178,6 +178,60 @@
  
          // Abandonware OS images are from https://winworldpc.com/library/operating-systems
          var oses = [
@@ -34,6 +56,25 @@ index 84bb3383..2eb2a2a3 100644
 +                homepage: "http://www.tinycorelinux.net/",
 +            },
 +            {
++                id: "jre-18-up",
++                memory_size: 256 * 1024 * 1024,
++                hda: {
++                    url: host + "tiny.img",
++                    size: 600 * 1024 * 1024,
++                    async: true,
++                },
++                cdrom: {
++                    url: host + "TinyCore-current.iso",
++                    size: 22 * 1024 * 1024,
++                    async: false,
++                },
++                state: {
++                    url: host + "v86state-up.bin.zst",
++                },
++                name: "jre-18-up",
++                homepage: "http://www.tinycorelinux.net/",
++            },
++            {
 +                id: "jre-18-boot",
 +                memory_size: 256 * 1024 * 1024,
 +                hda: {
@@ -52,37 +93,63 @@ index 84bb3383..2eb2a2a3 100644
              {
                  id: "archlinux",
                  name: "Arch Linux",
-@@ -1269,7 +1305,7 @@
+@@ -1007,6 +1061,10 @@
+                 })
+                 .catch(e => alert("Profile not found: " + profile));
+         }
++        else
++        {
++            console.warn("The profile was not found: " + profile);
++        }
+ 
+         function start_profile(infos)
+         {
+@@ -1260,6 +1318,12 @@
+             };
+         }
+ 
++        const queryString = window.location.search;
++        const urlParams = new URLSearchParams(queryString);
++        const urlWs = urlParams.get('ws');
++        const urlJar = urlParams.get('jar');
++        const urlLog = urlParams.get('log');
++
+         var emulator = new V86Starter({
+             "memory_size": memory_size,
+             "vga_memory_size": vga_memory_size,
+@@ -1269,7 +1333,7 @@
  
              "boot_order": settings.boot_order || parseInt($("boot_order").value, 16) || 0,
  
 -            "network_relay_url": ON_LOCALHOST ? "ws://localhost:8080/" : networking_proxy,
-+            "network_relay_url": ON_MY_LOCALHOST ? "ws://localhost:8080/" : networking_proxy,
++            "network_relay_url": urlWs ? urlWs : "ws://localhost:8080/",
  
              "bios": bios,
              "vga_bios": vga_bios,
-@@ -1339,6 +1375,20 @@
+@@ -1339,6 +1403,22 @@
                      emulator.keyboard_send_text("\n");
                  }, 3000);
              }
 +            else if (settings.id === "jre-18")
 +            {
-+              const queryString = window.location.search;
-+              const urlParams = new URLSearchParams(queryString);
-+              const urlJar = urlParams.get('jar')
-+              if(urlJar === "") {}
++              if(urlJar === null) {}
 +              else
 +              {
-+                emulator.serial0_send("<execute>\n");
-+                emulator.serial0_send("wget " + urlJar + "\n");
-+                emulator.serial0_send("java -jar *.jar");
-+                emulator.serial0_send("<end>");
++                setTimeout(function(){
++                  console.log("Start sending jar info");
++                  if (urlLog === 'true')
++                  {
++                      emulator.serial0_send("<log>true\n");
++                  }
++                  emulator.serial0_send("<jar>" + urlJar + "\n");
++                  console.log("End sending jar info: <jar>" + urlJar);
++                }, 5000);
 +              }
 +            }
  
              init_ui(settings, emulator);
  
-@@ -1357,6 +1407,17 @@
+@@ -1357,6 +1437,49 @@
              el.textContent = "Loading " + e.file_name + " failed. Check your connection " +
                               "and reload the page to try again.";
          });
@@ -90,18 +157,86 @@ index 84bb3383..2eb2a2a3 100644
 +        var serdata = "";
 +        emulator.add_listener("serial0-output-char", function(char)
 +        {
-+            if(char === "\r")
++            if(char === "\r" || char === "\n")
 +            {
 +                console.log("Got serial data: " + serdata);
++                handle_serial(serdata);
++                serdata = "";
 +                return;
 +            }
 +            serdata += char;
 +        });
++
++
++    }
++
++    var cur_ser_state = "";
++    function handle_serial(serdata)
++    {
++        if (serdata === "")
++        {
++          return;
++        }
++        else if (serdata === "<execute>")
++        {
++          cur_ser_state = "<execute>";
++          console.log("Do switching to execute");
++        }
++        else if (serdata === "<end>")
++        {
++          cur_ser_state = "";
++          console.log("Do switching off execute");
++        }
++        else if (cur_ser_state === "<execute>")
++        {
++          eval(serdata);
++          console.log("Do execute");
++        }
++        else
++        {
++          console.log("Nothing matching: '" + serdata + "'");
++        }
      }
  
      /**
+@@ -1909,6 +2032,7 @@
+ 
+         $("filesystem_send_file").onchange = function()
+         {
++// Here to send file
+             Array.prototype.forEach.call(this.files, function(file)
+             {
+                 var loader = new v86util.SyncFileBuffer(file);
+@@ -1928,6 +2052,7 @@
+ 
+         $("filesystem_get_file").onkeypress = async function(e)
+         {
++// Here to get file
+             if(e.which !== 13)
+             {
+                 return;
+diff --git a/src/browser/starter.js b/src/browser/starter.js
+index 5e1f4209..094f726e 100644
+--- a/src/browser/starter.js
++++ b/src/browser/starter.js
+@@ -185,6 +185,7 @@ function V86Starter(options)
+                 v86util.load_file(v86_bin, {
+                     done: async bytes =>
+                     {
++// Download is done
+                         try
+                         {
+                             const { instance } = await WebAssembly.instantiate(bytes, env);
+@@ -542,6 +543,7 @@ V86Starter.prototype.continue_init = async function(emulator, options)
+             v86util.load_file(f.url, {
+                 done: function(result)
+                 {
++// A download is done
+                     put_on_settings.call(this, f.name, f.as_json ? result : new SyncBuffer(result));
+                     cont(index + 1);
+                 }.bind(this),
 diff --git a/tools/docker/exec/Dockerfile b/tools/docker/exec/Dockerfile
-index efa1c7fd..36ae82fc 100644
+index efa1c7fd..50c2204e 100644
 --- a/tools/docker/exec/Dockerfile
 +++ b/tools/docker/exec/Dockerfile
 @@ -14,7 +14,8 @@ WORKDIR /v86
@@ -111,8 +246,8 @@ index efa1c7fd..36ae82fc 100644
 -ARG PORT=8000
 -CMD python3 -m http.server ${PORT}
 +#ARG PORT=8000
-+CMD cp -r /v86/ /fs_mount/
 +#python3 -m http.server ${PORT}
++CMD cp -r /v86/ /fs_mount/
  
 -EXPOSE ${PORT}
 +#EXPOSE ${PORT}

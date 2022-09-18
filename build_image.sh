@@ -12,8 +12,14 @@ get_data() # Args: relPath/tarDirName
 {
   local cur_dir=$(pwd)
   local tmpd=$(mktemp -d)
+  local tmp_jre=$(basename "$LINK_JRE")
   cd "$tmpd"
-  wget "$LINK_JRE"
+  if [ -f "/tmp/$tmp_jre" ]; then
+    cp "/tmp/$tmp_jre" .
+  else
+    wget "$LINK_JRE"
+    cp "$tmp_jre" "/tmp/$tmp_jre"
+  fi
   unzip *.zip
   rm *.zip
   mv * "$cur_dir/$1/jre"
@@ -36,15 +42,18 @@ echo "Cleaning up..."
 sudo umount tiny.mount || echo "Unmount not necessary."
 echo -n "" > tiny.img
 
-echo "Creating tiny.img ..."
+echo "Creating tiny.img..."
 dd if=/dev/zero of=tiny.img bs=1024 count=$((1024 * 600)) #600MB
 echo -e "o\nn\n\n\n\n\nw\n" | /sbin/fdisk tiny.img #New dos, new part.
+echo "Formating partition..."
 yes | /sbin/mkfs.ext2 -E "offset=$OFFS" tiny.img
 mkdir -p tiny.mount
 echo "Mounting image..."
 sudo mount -o loop,offset=$OFFS,user tiny.img tiny.mount/
 echo "Copy and get data..."
 sudo cp -r ../$OVER/* tiny.mount/
+sudo mkdir tiny.mount/data
+sudo chown 1000.1000 tiny.mount/data
 get_data tiny.mount/data
 sudo chown 1000.1000 tiny.mount/*
 sudo umount tiny.mount/

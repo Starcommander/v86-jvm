@@ -1,6 +1,7 @@
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Toolkit;
 
 import javax.swing.BorderFactory;
 import javax.swing.JFrame;
@@ -19,9 +20,12 @@ public class HelloWorldSwing {
 static int count = 0;
 
     private static void createAndShowGUI() {
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        int width = (int)screenSize.getWidth();
+        int height = (int)screenSize.getHeight();
         JFrame jFrame = new JFrame("Hello World Swing Example");
         jFrame.setLayout(new FlowLayout());
-        jFrame.setSize(500, 360);
+        jFrame.setSize(width, height);
         jFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
 
