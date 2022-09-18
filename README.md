@@ -1,7 +1,8 @@
 # v86-jvm
 Run Java-apps on web with v86 emu
-see https://java-on-web.org/examples
-web https://java-on-web.org/v86/
+- see https://java-on-web.org/examples
+- web https://java-on-web.org/v86/
+
 Possible optional values attached to url:
 - profile: Allowed is jre-18 and for internal use jre-18-boot
 - ws: A websocket server that runs websockproxy that allows internet access from vm.
